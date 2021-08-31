@@ -3,6 +3,8 @@ title: WorkloadSpread
 ---
 # WorkloadSpread
 
+**FEATURE STATE:** Kruise v0.10.0
+
 WorkloadSpread可以用来约束无状态Workload的区域分布，赋予单一workload的多域部署和弹性部署的能力。
 
 WorkloadSpread与Kruise社区的UnitedDeployment功能相似，每一个WorkloadSpread定义多个区域（定义为`subset`），

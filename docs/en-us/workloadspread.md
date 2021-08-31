@@ -3,7 +3,7 @@ title: WorkloadSpread
 ---
 # WorkloadSpread
 
-WorkloadSpread can be used to constrain the spread of stateless workload, which empower single workload the abilities to
+WorkloadSpread can be used to constrain the spread of stateless workload, which empower single workload the abilities for
 multi-domain deploy and elastic deploy.
 
 The feature of WorkloadSpread is similar with UnitedDeployment in Kruise community. Each WorkloadSpread defines multi-domain

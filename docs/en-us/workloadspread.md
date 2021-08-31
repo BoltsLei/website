@@ -3,14 +3,16 @@ title: WorkloadSpread
 ---
 # WorkloadSpread
 
-WorkloadSpread可以用来约束无状态Workload的区域分布，赋予单一workload的多域部署和弹性部署的能力。
+WorkloadSpread can be used to constrain the spread of stateless workload, which empower single workload the abilities to
+multi-domain deploy and elastic deploy.
 
-WorkloadSpread与Kruise社区的UnitedDeployment功能相似，每一个WorkloadSpread定义多个区域（定义为`subset`），
-`subset`对应一个`maxReplicas`数量。WorkloadSpread利用Webhook注入`subset`定义的域信息，且控制Pod的扩缩容顺序。
+The feature of WorkloadSpread is similar with UnitedDeployment in Kruise community. Each WorkloadSpread defines multi-domain
+called `subset`. Each domain should at least provide the capacity to run the replicas number of pods called `maxReplicas`.
+WorkloadSpread injects the domain config into the Pod by Webhook, and it also controls the order of scale in and scale out.
 
-目前支持的Workload类型：`CloneSet`、`Deployment`、`ReplicaSet`。
+Currently, supported workload: `CloneSet`、`Deployment`、`ReplicaSet`.
 
-API定义：https://github.com/openkruise/kruise/blob/819125ddbd4fb4ffb5f3b1ecf03490349a8f6727/apis/apps/v1alpha1/workloadspread_types.go
+API definition：https://github.com/openkruise/kruise/blob/819125ddbd4fb4ffb5f3b1ecf03490349a8f6727/apis/apps/v1alpha1/workloadspread_types.go
 
 ## WorkloadSpread Spec
 
@@ -28,7 +30,7 @@ type WorkloadSpreadSpec struct {
 	ScheduleStrategy WorkloadSpreadScheduleStrategy `json:"scheduleStrategy,omitempty"`
 }
 ```
-**注意**：`targetRef`不可以变更，且一个Workload只能对应一个WorkloadSpread。
+**Caution**：`targetRef`can not be mutated，and one workload can only correspond to one WorkloadSpread.
 
 ### Subset
 
@@ -60,9 +62,9 @@ type WorkloadSpreadSubset struct {
 }
 ```
 
-`MaxReplicas`：当前版本暂不支持百分比；若设置为空，代表不限制subset的副本数。
+`MaxReplicas`: the format of percentage is not supported in current version; It can be nil, which means there is no replicas limits in this subset.
 
-`Patch`: 自定义`subset`的Pod配置，可以是Annotations、Labels、Env等。
+`Patch`: the customized config of Pod in subset, such as Annotations、Labels、Env.
 
 ```yaml
 # patch metadata:
@@ -95,13 +97,13 @@ patch:
         value: main
 ```
 
-## 模拟调度和Reschedule
+## SimulateSchedule & Reschedule
 
-WorkloadSpread提供了两种调度策略，默认为`Fixed`:
+WorkloadSpread provides two kind strategies, the default strategy is 'Fixed'.
 
 ### Fixed: 
 
-Workload严格按照`subset`定义分布。
+Workload is strictly spread according to the definition of the subset. 
   
 ### Adaptive
 
@@ -122,38 +124,40 @@ type AdaptiveWorkloadSpreadStrategy struct {
 	RescheduleCriticalSeconds *int32 `json:"rescheduleCriticalSeconds,omitempty"`
 }
 ```
-  
-**模拟调度**： Kruise会对`subset`的Node资源做简单过滤，若资源不足会调度到下一个`subset`。
-  
-**Reschedule**：Kruise检查`subset`调度失败的Pod，若超过用户定义的时间就调度到其他`subset`。
 
-## 环境要求
+**SimulateSchedule**: Kruise will simply filter the Node resources of the `subset`. If the resources are insufficient, it will be scheduled to the next Subset.
+
+**Reschedule** Kruise will check the Pods of `subset` were scheduled failed. If it exceeds the defined duration, the failed Pods will be rescheduled to other `subset`.
+
+## Required
 
 ### Pod Webhook
-WorkloadSpread利用`webhook`向Pod注入域规则并且关心Pod的驱逐和删除事件。
+WorkloadSpread uses `webhook` to inject fault domain rules and cares about delete and eviction event of Pod.
 
-如果`PodWebhook` feature-gate被设置为`false`，WorkloadSpread也将不可用。
+If the `PodWebhook` feature-gate is set to false, WorkloadSpread will also be disabled.
 
 ### deletion-cost feature
-CloneSet已经支持该特性。
+CloneSet has supported deletion-cost feature in the latest versions.
 
-其他native workload需kubernetes version >= 1.21。1.21版本需要开启 `PodDeletionCost` feature-gate。自1.22起默认开启。
+The other native workload need kubernetes version >= 1.21. (In 1.21, users need to enable PodDeletionCost feature-gate, and since 1.22 it will be enabled by default)
 
-## 扩缩容顺序：
-### 扩容
-- 按照`spec.subsets`中`subset`定义的顺序调度Pod，当前`subset`的Pod数量达到`maxReplicas`时再调度到下一个`subset`。
+## Scale order:
+
+### Scale out
+- The Pods are scheduled in the subset order defined in the `spec.subsets`. It will be scheduled in the next `subset` while the replica number reaches the maxReplicas of `subset` 
   
-### 缩容
-- 当`subset`的副本数大于定义的maxReplicas时，优先缩容多余的Pod。
-- 按照`spec.subsets`中`subset`定义的顺序，后面的`subset`的Pod先于前面的被删除。
+### Scale in
 
-## 例子
+- When the replica number of the `subset` is greater than the `maxReplicas`, the extra Pods will be removed in a high priority.
+- According to the `subset` order in the `spec.subsets`, the Pods of the `subset` at the back are deleted before the Pods at the front `subset`.
 
-### 弹性部署
+## Example
 
-zone-a（ack）固定100个Pod，zone-b（eci）做弹性区域
+### Elastic deploy
 
-1. 创建WorkloadSpread实例
+`zone-a`(ACK) holds 100 Pods, `zone-b`(ECI) as an elastic zone holds additional Pods.
+
+1. Create a WorkloadSpread instance.
 ```yaml
 apiVersion: apps.kruise.io/v1alpha1
 kind: WorkloadSpread
@@ -161,12 +165,12 @@ metadta:
   name: ws-demo
   namespace: deploy
 spec:
-  targetRef: # 相同namespace下的workload
+  targetRef: # workload in the same namespace
     apiVersion: apps.kruise.io/v1alpha1
     kind: CloneSet
     name: workload-xxx
   subsets:
-  - name: ack # zone ack，最多100个副本。
+  - name: ACK # zone ACK
     requiredNodeSelectorTerm:
       matchExpressions:
       - key: topology.kubernetes.io/zone
@@ -174,11 +178,11 @@ spec:
         values:
         - ack
     maxReplicas: 100
-    patch: # 注入label
+    patch: # inject label.
       metadata:
         labels:
           deploy/zone: ack
-  - name: eci # 弹性区域eci，副本数量不限。
+  - name: ECI # zone ECI
     requiredNodeSelectorTerm:
       matchExpressions:
       - key: topology.kubernetes.io/zone
@@ -190,18 +194,19 @@ spec:
         labels:
           deploy/zone: eci
 ```
-2. 创建workload，副本数可以自由调整。
+2. Creat a corresponding workload, the number of replicas ca be adjusted freely.
 
-#### 部署效果
-- 当replicas <= 100 时，Pod被调度到ack上。
-- 当replicas > 100 时，100个在ack，多余的Pod在弹性域eci。
-- 缩容时优先从弹性域eci上缩容。
+#### Effect
 
-### 多域部署
+- When the number of `replicas` <= 100, the Pods are scheduled in `ACK` zone.
+- When the number of `replicas` > 100, the 100 Pods are in `ACK` zone, the extra Pods are scheduled in `ECI` zone.
+- The Pods in `ECI` elastic zone are removed first when scaling in.
 
-分别部署100个副本的Pod到两个机房（zone-a, zone-b）
+### Multi-domain deploy
 
-1. 创建WorkloadSpread实例
+Deploy 100 Pods to two `zone`(zone-a, zone-b) separately.
+
+1. Create a WorkloadSpread instance.
 ```yaml
 apiVersion: apps.kruise.io/v1alpha1
 kind: WorkloadSpread
@@ -209,12 +214,12 @@ metadta:
   name: ws-demo
   namespace: deploy
 spec:
-  targetRef: # 相同namespace下的workload
+  targetRef:
     apiVersion: apps.kruise.io/v1alpha1
     kind: CloneSet
     name: workload-xxx
   subsets:
-  - name: subset-a # 区域A，100个副本。
+  - name: subset-a
     requiredNodeSelectorTerm:
       matchExpressions:
       - key: topology.kubernetes.io/zone
@@ -226,7 +231,7 @@ spec:
       metadata:
         labels:
           deploy/zone: zonb-a
-  - name: subset-b # 区域B，100个副本。
+  - name: subset-b
     requiredNodeSelectorTerm:
       matchExpressions:
       - key: topology.kubernetes.io/zone
@@ -240,6 +245,6 @@ spec:
           deploy/zone: zone-b
 ```
 
-2. 创建200副本的workload，或者对已有的workload执行滚动更新。
+2. Creat a corresponding workload with a 200 replicas, or perform a rolling update on an existing workload.
 
-3. 如zone副本分布需要变动，先调整对应`subset`的`maxReplicas`，再调整workload副本数。
+3. If the spread of zone needs to be changed, first adjust the `maxReplicas` of `subset`, and then change the `replicas` of workload.
